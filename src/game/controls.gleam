@@ -39,7 +39,7 @@ pub type UserBindings =
 pub type UIBindings =
   dict.Dict(Action, List(UserInputBinding))
 
-const default_ui_bindings = [
+pub const default_ui_bindings = [
   #(MoveUp, [Key(input.KeyW), Button(input.DPadUp)]),
   #(MoveDown, [Key(input.KeyS), Button(input.DPadDown)]),
   #(MoveLeft, [Key(input.KeyA), Button(input.DPadLeft)]),
@@ -49,9 +49,6 @@ const default_ui_bindings = [
 
 // Forward  [ W ] [ DPadUp ]
 //
-
-// Something like this for local setting storage?
-// type Bindings = dict.Dict(Action, #(Option(input.Key), Option(input.GamepadButton)))
 
 pub fn default_bindings() -> input.InputBindings(Action) {
   default_ui_bindings
