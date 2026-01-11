@@ -1,13 +1,15 @@
 import easings
 import gleam/dict
+import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/pair
 import gleam/result
 import gleam/time/duration
 import tiramisu/tween
 
-const piece_exit_duration: Int = 100
+const piece_exit_duration: Int = 1000
 
 pub type Piece {
   Piece(kind: PieceKind, id: Int)
@@ -34,6 +36,7 @@ pub type Board {
     patterns: Rings,
     selected: RingName,
     transitions: Transitions,
+    spawn_timer: duration.Duration,
   )
 }
 
@@ -42,46 +45,6 @@ pub type Transitions =
 
 pub type Rings {
   Rings(inner: Ring, middle: Ring, outer: Ring)
-}
-
-pub fn new_board() -> Board {
-  Board(
-    next_piece_id: 4,
-    state: Playing,
-    pieces: new_rings(),
-    patterns: new_rings(),
-    selected: Inner,
-    transitions: dict.from_list([
-      #(RingEntity(Outer), RotateRing(direction: Right, tween: rotate_tween())),
-    ]),
-  )
-}
-
-fn rotate_tween() -> tween.Tween(Float) {
-  tween.tween_float(0.0, 1.0, duration.seconds(3), easings.linear)
-}
-
-pub fn new_rings() -> Rings {
-  Rings(inner: new_ring(1), middle: new_ring(2), outer: new_ring(3))
-}
-
-pub fn new_ring(id: Int) -> Ring {
-  let kind = case id % 5 {
-    1 -> P1
-    2 -> P2
-    3 -> P3
-    _ -> P4
-  }
-  Ring(
-    a: None,
-    b: Some(Piece(id:, kind:)),
-    c: None,
-    d: None,
-    e: None,
-    f: None,
-    g: None,
-    h: None,
-  )
 }
 
 pub type RingName {
@@ -114,13 +77,96 @@ pub type Ring {
   Ring(a: Slot, b: Slot, c: Slot, d: Slot, e: Slot, f: Slot, g: Slot, h: Slot)
 }
 
+pub fn new_board() -> Board {
+  Board(
+    next_piece_id: 4,
+    state: Playing,
+    pieces: new_rings(),
+    patterns: new_rings(),
+    selected: Inner,
+    transitions: dict.from_list([
+      #(RingEntity(Outer), RotateRing(direction: Right, tween: rotate_tween())),
+    ]),
+    spawn_timer: new_spawn_timer(),
+  )
+}
+
+fn new_spawn_timer() -> duration.Duration {
+  duration.seconds(3)
+}
+
+fn rotate_tween() -> tween.Tween(Float) {
+  tween.tween_float(0.0, 1.0, duration.seconds(3), easings.linear)
+}
+
+pub fn new_rings() -> Rings {
+  Rings(inner: new_ring(1), middle: new_ring(2), outer: new_ring(3))
+}
+
+pub fn new_ring(id: Int) -> Ring {
+  let kind = case id % 5 {
+    1 -> P1
+    2 -> P2
+    3 -> P3
+    _ -> P4
+  }
+  Ring(
+    a: None,
+    b: Some(Piece(id:, kind:)),
+    c: None,
+    d: None,
+    e: None,
+    f: None,
+    g: None,
+    h: None,
+  )
+}
+
 pub fn handle_tick(board: Board, delta_time: duration.Duration) -> Board {
   board
+  |> spawn_piece(delta_time)
   |> advance_transitions(delta_time)
+  |> apply_drops()
   |> queue_vertical_matches()
   |> queue_horizontal_matches()
-  // |> queue_drops()
-  |> apply_drops()
+}
+
+fn spawn_piece(board: Board, delta_time: duration.Duration) -> Board {
+  let spawn_timer = duration.difference(delta_time, board.spawn_timer)
+  case duration.to_seconds(spawn_timer) {
+    neg if neg <=. 0.0 -> {
+      let kind = P1
+      // let kind = case int.random(5) {
+      //   0 -> P1
+      //   1 -> P2
+      //   2 -> P3
+      //   3 -> P4
+      //   4 -> P5
+      //   _ -> panic as "invalid random piece kind"
+      // }
+      let id = board.next_piece_id
+      let position = int.random(8)
+      let transition =
+        PieceFalling(
+          position:,
+          piece: Piece(kind:, id:),
+          tween: tween.tween_float(
+            0.0,
+            1.0,
+            duration.milliseconds(2000),
+            easings.linear,
+          ),
+        )
+
+      Board(
+        ..board,
+        next_piece_id: board.next_piece_id + 1,
+        spawn_timer: new_spawn_timer(),
+        transitions: dict.insert(board.transitions, PieceEntity(id), transition),
+      )
+    }
+    _ -> Board(..board, spawn_timer:)
+  }
 }
 
 // Progress active transitions, purging them if they are complete and
@@ -311,51 +357,37 @@ pub fn board_solved(board: Board) -> Bool {
 
 // Ensure pieces above holes are dropped into the ring below
 pub fn apply_drops(board: Board) -> Board {
+  // NOTE: This has the effect of moving a piece from the outer ring to the inner over two frames.
+  // We could apply it twice in a row, or potentially swap the order of operations.
   let Rings(inner:, middle:, outer:) = board.pieces
-  let #(middle, inner) = execute_drop(middle, inner)
-  let #(outer, middle) = execute_drop(outer, middle)
+  let a = execute_drop_all(inner.a, middle.a, outer.a)
+  let b = execute_drop_all(inner.b, middle.b, outer.b)
+  let c = execute_drop_all(inner.c, middle.c, outer.c)
+  let d = execute_drop_all(inner.d, middle.d, outer.d)
+  let e = execute_drop_all(inner.e, middle.e, outer.e)
+  let f = execute_drop_all(inner.f, middle.f, outer.f)
+  let g = execute_drop_all(inner.g, middle.g, outer.g)
+  let h = execute_drop_all(inner.h, middle.h, outer.h)
+  let inner =
+    Ring(a: a.0, b: b.0, c: c.0, d: d.0, e: e.0, f: f.0, g: g.0, h: h.0)
+  let middle =
+    Ring(a: a.1, b: b.1, c: c.1, d: d.1, e: e.1, f: f.1, g: g.1, h: h.1)
+  let outer =
+    Ring(a: a.2, b: b.2, c: c.2, d: d.2, e: e.2, f: f.2, g: g.2, h: h.2)
   Board(..board, pieces: Rings(inner:, middle:, outer:))
 }
 
-// Drop pieces from the ring above into the holes below
-fn execute_drop(above: Ring, below: Ring) -> #(Ring, Ring) {
-  #(
-    Ring(
-      a: execute_drop_above(above.a, below.a),
-      b: execute_drop_above(above.b, below.b),
-      c: execute_drop_above(above.c, below.c),
-      d: execute_drop_above(above.d, below.d),
-      e: execute_drop_above(above.e, below.e),
-      f: execute_drop_above(above.f, below.f),
-      g: execute_drop_above(above.g, below.g),
-      h: execute_drop_above(above.h, below.h),
-    ),
-    Ring(
-      a: execute_drop_below(above.a, below.a),
-      b: execute_drop_below(above.b, below.b),
-      c: execute_drop_below(above.c, below.c),
-      d: execute_drop_below(above.d, below.d),
-      e: execute_drop_below(above.e, below.e),
-      f: execute_drop_below(above.f, below.f),
-      g: execute_drop_below(above.g, below.g),
-      h: execute_drop_below(above.h, below.h),
-    ),
-  )
-}
-
-fn execute_drop_above(above: Slot, below: Slot) -> Slot {
-  // can't drop if occupied
-  case below {
-    Some(_) -> above
-    None -> None
-  }
-}
-
-fn execute_drop_below(above: Slot, below: Slot) -> Slot {
-  // allow drop if unoccupied
-  case below {
-    Some(_) -> below
-    None -> above
+fn execute_drop_all(
+  inner: Slot,
+  middle: Slot,
+  outer: Slot,
+) -> #(Slot, Slot, Slot) {
+  case inner, middle, outer {
+    Some(_), None, Some(_) -> #(inner, outer, None)
+    None, None, Some(_) -> #(outer, None, None)
+    None, Some(_), None -> #(middle, None, None)
+    None, Some(_), Some(_) -> #(middle, outer, None)
+    _, _, _ -> #(inner, middle, outer)
   }
 }
 

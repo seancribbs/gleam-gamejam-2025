@@ -4,9 +4,10 @@ import game/piece
 import game/scene.{BoardGroup, BoardRing, Piece, RingPieces, id} as _
 import game/state.{type GameState, InGame, Paused}
 import gleam/dict
+import gleam/float
 import gleam/int
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/time/duration
 import gleam_community/colour
 import gleam_community/maths
@@ -30,6 +31,7 @@ pub fn board(
         list.flatten([
           rings(),
           pieces(board, time),
+          falling_pieces(board, time),
         ])
       _ -> []
     },
@@ -37,7 +39,7 @@ pub fn board(
 }
 
 fn pieces(board: core.Board, time: duration.Duration) -> List(scene.Node) {
-  let assert Ok(piece_geo) = geometry.icosahedron(radius: 0.25, detail: 0)
+  let piece_geo = piece_geometry()
   let core.Rings(inner:, middle:, outer:) = board.pieces
   use r <- list.map([
     #(core.Inner, inner),
@@ -51,14 +53,15 @@ fn pieces(board: core.Board, time: duration.Duration) -> List(scene.Node) {
       case core.piece_at(ring, i) {
         None -> Error(Nil)
         Some(p) -> {
-          let assert Ok(piece_mat) =
-            material.new()
-            |> material.with_color(piece.piece_color(p.kind))
-            |> material.with_metalness(0.75)
-            |> material.with_roughness(0.5)
-            |> material.build()
+          let piece_mat = piece_material(p)
 
-          let p_transform = piece_transform(ring_name, i, time)
+          let p_transform =
+            piece_transform(
+              Some(ring_name),
+              i,
+              time,
+              dict.get(board.transitions, core.PieceEntity(p.id)),
+            )
 
           Ok(scene.mesh(
             id: id(Piece(p.id)),
@@ -98,24 +101,52 @@ fn pieces(board: core.Board, time: duration.Duration) -> List(scene.Node) {
   )
 }
 
+fn piece_geometry() -> geometry.Geometry {
+  let assert Ok(piece_geo) = geometry.icosahedron(radius: 0.25, detail: 0)
+  piece_geo
+}
+
+fn piece_material(p: core.Piece) -> material.Material {
+  let assert Ok(piece_mat) =
+    material.new()
+    |> material.with_color(piece.piece_color(p.kind))
+    |> material.with_metalness(0.75)
+    |> material.with_roughness(0.5)
+    |> material.build()
+  piece_mat
+}
+
 fn piece_transform(
-  ring_name: core.RingName,
+  ring_name: Option(core.RingName),
   position: Int,
   time: duration.Duration,
+  transition: Result(core.Transition, Nil),
 ) -> transform.Transform {
-  let distance = case ring_name {
-    core.Inner -> 1.5
-    core.Middle -> 2.25
-    core.Outer -> 3.0
+  let distance = case ring_name, transition {
+    Some(core.Inner), _ -> 1.5
+    Some(core.Middle), _ -> 2.25
+    Some(core.Outer), _ -> 3.0
+    _, Ok(core.PieceFalling(tween:, ..)) ->
+      5.0 -. { tween.get_value(tween) *. 2.0 }
+    _, _ -> panic as "invalid piece transform arguments"
   }
   let time = duration.to_seconds(time)
   let angle = { maths.pi() /. 4.0 } *. int.to_float(position)
   let x = distance *. maths.cos(angle)
   let y = distance *. maths.sin(angle)
+
+  // Scale up/down the piece when it is exiting the board
+  let scale = case transition {
+    Ok(core.PieceExit(tween:, ..)) ->
+      tween |> tween.get_value() |> float.clamp(min: 0.0, max: 2.0)
+
+    _ -> 1.0
+  }
   transform.at(vec3.Vec3(x, y, 97.0))
   |> transform.rotate_y(time /. 1.0)
   |> transform.rotate_z(time /. 2.0)
   |> transform.rotate_x(time /. 5.0)
+  |> transform.with_scale(vec3.splat(scale))
 }
 
 fn rings() -> List(scene.Node) {
@@ -171,4 +202,31 @@ fn rings() -> List(scene.Node) {
       physics: None,
     ),
   ]
+}
+
+fn falling_pieces(
+  board: core.Board,
+  time: duration.Duration,
+) -> List(scene.Node) {
+  let piece_geo = piece_geometry()
+
+  board.transitions
+  |> dict.values()
+  |> list.filter_map(fn(t) {
+    case t {
+      core.PieceFalling(position:, piece:, tween: _) -> {
+        let piece_mat = piece_material(piece)
+        let p_transform = piece_transform(None, position, time, Ok(t))
+
+        Ok(scene.mesh(
+          id: id(Piece(piece.id)),
+          transform: p_transform,
+          geometry: piece_geo,
+          material: piece_mat,
+          physics: None,
+        ))
+      }
+      _ -> Error(Nil)
+    }
+  })
 }

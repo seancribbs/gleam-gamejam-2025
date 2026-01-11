@@ -1,6 +1,8 @@
+import game/texture_ext
 import gleam/javascript/promise
 import gleam/list
 import gleam/result
+import savoiardi
 import tiramisu/effect
 import tiramisu/texture
 
@@ -33,12 +35,17 @@ pub fn load_all(
   on_fail on_fail: a,
 ) -> effect.Effect(a) {
   all_assets
-  |> list.map(texture.load)
+  |> list.map(savoiardi.load_texture)
   |> promise.await_list
   |> promise.map(fn(textures) {
     case result.all(textures) {
       Ok([lucy, lucy_happy, lucy_sleep, starfield, ..]) ->
-        on_success(LoadedTextures(lucy:, lucy_happy:, lucy_sleep:, starfield:))
+        on_success(LoadedTextures(
+          lucy:,
+          lucy_happy:,
+          lucy_sleep:,
+          starfield: texture_ext.set_srgb_color_space(starfield),
+        ))
       _ -> on_fail
     }
   })

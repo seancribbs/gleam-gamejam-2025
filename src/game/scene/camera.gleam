@@ -9,12 +9,14 @@ import vec/vec3
 pub fn root_camera(ctx: tiramisu.Context) -> scene.Node {
   // let assert Ok(camera) =
   //   camera.perspective(field_of_view: 75.0, near: 0.1, far: 1000.0)
-  let aspect_ratio = ctx.canvas_width /. ctx.canvas_height
-  let half_x = case ctx.canvas_width <. ctx.canvas_height {
+  let canvas_width = ctx.canvas_size.x
+  let canvas_height = ctx.canvas_size.y
+  let aspect_ratio = canvas_width /. canvas_height
+  let half_x = case canvas_width <. canvas_height {
     True -> 10.0 /. aspect_ratio
     False -> 10.0
   }
-  let half_y = case ctx.canvas_width <. ctx.canvas_height {
+  let half_y = case canvas_width <. canvas_height {
     True -> 10.0
     False -> 10.0 /. aspect_ratio
   }
@@ -32,8 +34,11 @@ pub fn root_camera(ctx: tiramisu.Context) -> scene.Node {
     id: id(RootCamera),
     camera: camera,
     active: True,
-    transform: transform.at(vec3.Vec3(0.0, 0.0, 0.0)),
-    look_at: Some(vec3.Vec3(0.0, 0.0, 1000.0)),
+    transform: transform.look_at(
+      from: transform.at(vec3.Vec3(0.0, 0.0, 0.0)),
+      to: transform.at(vec3.Vec3(0.0, 0.0, 1000.0)),
+      up: Some(vec3.Vec3(0.0, 1.0, 0.0)),
+    ),
     viewport: None,
     postprocessing: None,
   )

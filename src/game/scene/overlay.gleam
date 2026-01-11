@@ -7,6 +7,7 @@ import tiramisu/geometry
 import tiramisu/material
 import tiramisu/scene
 import tiramisu/transform
+import vec/vec2
 import vec/vec3
 
 pub fn overlay(state: state.GameState) -> scene.Node {
@@ -16,7 +17,7 @@ pub fn overlay(state: state.GameState) -> scene.Node {
         id: id(OverlayMask),
         transform: transform.at(vec3.Vec3(0.0, 0.0, 0.11)),
         geometry: {
-          let assert Ok(geo) = geometry.plane(30.0, 30.0)
+          let assert Ok(geo) = geometry.plane(vec2.Vec2(30.0, 30.0))
           geo
         },
         material: {
@@ -26,6 +27,9 @@ pub fn overlay(state: state.GameState) -> scene.Node {
               map: None,
               transparent: True,
               opacity: 0.7,
+              side: material.FrontSide,
+              alpha_test: 0.0,
+              depth_write: False,
             )
           m
         },

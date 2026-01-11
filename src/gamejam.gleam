@@ -13,6 +13,7 @@ import game/ui as gameui
 import gleam/option.{type Option, None, Some}
 import gleam/time/duration
 
+import savoiardi
 import tiramisu
 import tiramisu/effect.{type Effect}
 import tiramisu/input
@@ -37,13 +38,15 @@ pub type Msg {
 pub fn main() -> Nil {
   gameui.start()
 
-  let assert Ok(_) =
-    tiramisu.run(selector: "#game", dimensions: None, init:, update:, view:)
+  let app = tiramisu.application(init:, update:, view:)
+
+  let assert Ok(_) = tiramisu.start(app, "#game", tiramisu.FullScreen, None)
 
   Nil
 }
 
-fn init(_ctx: tiramisu.Context) -> #(Model, Effect(Msg), Option(_)) {
+fn init(ctx: tiramisu.Context) -> #(Model, Effect(Msg), Option(_)) {
+  savoiardi.set_scene_background_color(ctx.scene, 0)
   #(
     Model(
       state: Menu,
@@ -52,10 +55,7 @@ fn init(_ctx: tiramisu.Context) -> #(Model, Effect(Msg), Option(_)) {
       input: controls.default_bindings(),
       textures: None,
     ),
-    effect.batch([
-      effect.tick(Tick),
-      assets.load_all(on_success: AssetsLoaded, on_fail: AssetLoadingFailed),
-    ]),
+    assets.load_all(on_success: AssetsLoaded, on_fail: AssetLoadingFailed),
     None,
   )
 }
@@ -77,7 +77,7 @@ fn update(
         Model(..model, time: new_time, board:),
         effect.batch([
           // ui.dispatch_to_lustre(gameui.CurrentTime(new_time)),
-          effect.tick(Tick),
+          effect.dispatch(Tick),
         ]),
         None,
       )
@@ -85,7 +85,7 @@ fn update(
     AssetsLoaded(textures) -> {
       #(
         Model(..model, textures: Some(textures), state: InGame),
-        effect.none(),
+        effect.dispatch(Tick),
         None,
       )
     }
