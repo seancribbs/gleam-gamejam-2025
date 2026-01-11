@@ -3,7 +3,6 @@ import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/order
 import gleam/pair
 import gleam/result
 import gleam/time/duration
