@@ -5,8 +5,13 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
 import gleam/result
+import gleam/set
 import gleam/time/duration
 import tiramisu/tween
+
+// How many patterns to place on the board
+
+const pattern_count = 6
 
 // Transition durations
 
@@ -90,14 +95,12 @@ pub type Ring {
 
 pub fn new_board() -> Board {
   Board(
-    next_piece_id: 4,
+    next_piece_id: 1,
     state: Playing,
     pieces: new_rings(),
-    patterns: new_rings(),
+    patterns: new_patterns(),
     selected: Inner,
-    transitions: dict.from_list([
-      #(RingEntity(Outer), RotateRing(direction: Right, tween: rotate_tween())),
-    ]),
+    transitions: dict.new(),
     spawn_timer: new_spawn_timer(),
   )
 }
@@ -116,26 +119,11 @@ fn rotate_tween() -> tween.Tween(Float) {
 }
 
 pub fn new_rings() -> Rings {
-  Rings(inner: new_ring(1), middle: new_ring(2), outer: new_ring(3))
+  Rings(inner: new_ring(), middle: new_ring(), outer: new_ring())
 }
 
-pub fn new_ring(id: Int) -> Ring {
-  let kind = case id % 5 {
-    1 -> P1
-    2 -> P2
-    3 -> P3
-    _ -> P4
-  }
-  Ring(
-    a: None,
-    b: Some(Piece(id:, kind:)),
-    c: None,
-    d: None,
-    e: None,
-    f: None,
-    g: None,
-    h: None,
-  )
+pub fn new_ring() -> Ring {
+  Ring(a: None, b: None, c: None, d: None, e: None, f: None, g: None, h: None)
 }
 
 pub fn handle_tick(board: Board, delta_time: duration.Duration) -> Board {
@@ -145,21 +133,149 @@ pub fn handle_tick(board: Board, delta_time: duration.Duration) -> Board {
   |> apply_drops()
   |> queue_vertical_matches()
   |> queue_horizontal_matches()
+  |> check_solution()
+  |> clear_failed()
+}
+
+fn clear_failed(board: Board) -> Board {
+  case board.state {
+    Playing -> board
+    Failed -> Board(..new_board(), selected: board.selected)
+  }
+}
+
+fn check_solution(board: Board) -> Board {
+  case board_solved(board) {
+    True -> {
+      let patterns = new_patterns()
+      let transitions = queue_pattern_matches(board.pieces, board.patterns)
+
+      Board(
+        ..board,
+        patterns:,
+        transitions: dict.merge(board.transitions, transitions),
+      )
+    }
+    False -> board
+  }
+}
+
+fn queue_pattern_matches(
+  pieces: Rings,
+  patterns: Rings,
+) -> dict.Dict(Entity, Transition) {
+  let Rings(inner:, middle:, outer:) = patterns
+  let Rings(inner: inner_p, middle: middle_p, outer: outer_p) = pieces
+
+  use transitions, #(ring_name, patterns, pieces) <- list.fold(
+    [
+      #(Inner, inner, inner_p),
+      #(Middle, middle, middle_p),
+      #(Outer, outer, outer_p),
+    ],
+    dict.new(),
+  )
+
+  transitions
+  |> queue_pattern_match(ring_name, 0, patterns.a, pieces.a)
+  |> queue_pattern_match(ring_name, 1, patterns.b, pieces.b)
+  |> queue_pattern_match(ring_name, 2, patterns.c, pieces.c)
+  |> queue_pattern_match(ring_name, 3, patterns.d, pieces.d)
+  |> queue_pattern_match(ring_name, 4, patterns.e, pieces.e)
+  |> queue_pattern_match(ring_name, 5, patterns.f, pieces.f)
+  |> queue_pattern_match(ring_name, 6, patterns.g, pieces.g)
+  |> queue_pattern_match(ring_name, 7, patterns.h, pieces.h)
+}
+
+fn queue_pattern_match(
+  transitions: dict.Dict(Entity, Transition),
+  ring_name: RingName,
+  position: Int,
+  pattern: Slot,
+  piece: Slot,
+) -> Transitions {
+  case pattern, piece {
+    Some(_), Some(p) ->
+      dict.insert(
+        transitions,
+        PieceEntity(p.id),
+        piece_exit_transition(ring_name, position),
+      )
+    _, _ -> transitions
+  }
+}
+
+fn new_patterns() -> Rings {
+  let patterns = generate_patterns(set.new(), pattern_count)
+
+  use rings, #(ring_name, position, kind) <- list.fold(
+    set.to_list(patterns),
+    new_rings(),
+  )
+
+  case ring_name {
+    Inner -> Rings(..rings, inner: place_pattern(rings.inner, position, kind))
+    Middle ->
+      Rings(..rings, middle: place_pattern(rings.middle, position, kind))
+    Outer -> Rings(..rings, outer: place_pattern(rings.outer, position, kind))
+  }
+}
+
+fn place_pattern(ring: Ring, position: Int, kind: PieceKind) -> Ring {
+  let assert Ok(ring) = place_piece(ring, position, Piece(id: 0, kind:))
+  ring
+}
+
+fn generate_patterns(
+  p: set.Set(#(RingName, Int, PieceKind)),
+  count: Int,
+) -> set.Set(#(RingName, Int, PieceKind)) {
+  case count {
+    0 -> p
+    _ -> {
+      let new_pattern = generate_pattern()
+      case set.contains(p, new_pattern) {
+        True -> generate_patterns(p, count)
+        False -> generate_patterns(set.insert(p, new_pattern), count - 1)
+      }
+    }
+  }
+}
+
+fn generate_pattern() -> #(RingName, Int, PieceKind) {
+  let name = case int.random(3) {
+    0 -> Inner
+    1 -> Middle
+    2 -> Outer
+    _ -> panic as "invalid random ring name"
+  }
+
+  let position = int.random(8)
+
+  let kind = case int.random(5) {
+    0 -> P1
+    1 -> P2
+    2 -> P3
+    3 -> P4
+    4 -> P5
+    _ -> panic as "invalid random piece kind"
+  }
+
+  #(name, position, kind)
 }
 
 fn spawn_piece(board: Board, delta_time: duration.Duration) -> Board {
   let spawn_timer = duration.difference(delta_time, board.spawn_timer)
   case duration.to_seconds(spawn_timer) {
     neg if neg <=. 0.0 -> {
-      let kind = P1
-      // let kind = case int.random(5) {
-      //   0 -> P1
-      //   1 -> P2
-      //   2 -> P3
-      //   3 -> P4
-      //   4 -> P5
-      //   _ -> panic as "invalid random piece kind"
-      // }
+      let kind = case int.random(5) {
+        0 -> P1
+        1 -> P2
+        2 -> P3
+        3 -> P4
+        4 -> P5
+        _ -> panic as "invalid random piece kind"
+      }
       let id = board.next_piece_id
       let position = int.random(8)
       let transition =
