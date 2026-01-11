@@ -29,7 +29,7 @@ pub fn board(
     children: case state {
       InGame | Paused ->
         list.flatten([
-          rings(),
+          rings(board.selected),
           pieces(board, time),
           falling_pieces(board, time),
         ])
@@ -149,7 +149,7 @@ fn piece_transform(
   |> transform.with_scale(vec3.splat(scale))
 }
 
-fn rings() -> List(scene.Node) {
+fn rings(selected: core.RingName) -> List(scene.Node) {
   let assert Ok(inner_geo) =
     geometry.torus(
       radius: 1.5,
@@ -178,27 +178,43 @@ fn rings() -> List(scene.Node) {
     |> material.with_roughness(0.0)
     |> material.build()
 
+  let assert Ok(selected_ring_mat) =
+    material.new()
+    |> material.with_color(colour.to_rgb_hex(colour.yellow))
+    |> material.with_metalness(0.75)
+    |> material.with_roughness(0.0)
+    |> material.build()
+
   let transform = transform.at(vec3.Vec3(0.0, 0.0, 100.0))
   [
     scene.mesh(
       id: id(BoardRing(core.Inner)),
       transform:,
       geometry: inner_geo,
-      material: ring_mat,
+      material: case selected {
+        core.Inner -> selected_ring_mat
+        _ -> ring_mat
+      },
       physics: None,
     ),
     scene.mesh(
       id: id(BoardRing(core.Middle)),
       transform:,
       geometry: middle_geo,
-      material: ring_mat,
+      material: case selected {
+        core.Middle -> selected_ring_mat
+        _ -> ring_mat
+      },
       physics: None,
     ),
     scene.mesh(
       id: id(BoardRing(core.Outer)),
       transform:,
       geometry: outer_geo,
-      material: ring_mat,
+      material: case selected {
+        core.Outer -> selected_ring_mat
+        _ -> ring_mat
+      },
       physics: None,
     ),
   ]
