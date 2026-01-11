@@ -1,3 +1,5 @@
+import game/core
+import game/state
 import gleam/dict
 import gleam/list
 import gleam/option.{None, Some}
@@ -19,14 +21,15 @@ const all_actions: List(Action) = [
   MoveRight,
 ]
 
-const instantaneous_actions: List(Action) = [MenuToggle]
-
-const continuous_actions: List(Action) = [
+const instantaneous_actions: List(Action) = [
+  MenuToggle,
   MoveUp,
   MoveDown,
   MoveLeft,
   MoveRight,
 ]
+
+const continuous_actions: List(Action) = []
 
 pub type UserInputBinding {
   Key(input.Key)
@@ -88,6 +91,30 @@ pub fn ui_bindings_to_user(ui: UIBindings) -> UserBindings {
   dict.fold(ui, dict.new(), fn(user, action, inputs) {
     list.fold(inputs, user, fn(user, input) { dict.insert(user, input, action) })
   })
+}
+
+pub fn handle_input(
+  board: core.Board,
+  state: state.GameState,
+  bindings: input.InputBindings(Action),
+  input: input.InputState,
+) -> #(core.Board, state.GameState) {
+  case state {
+    state.Loading | state.Menu | state.Paused -> #(board, state)
+    state.InGame -> {
+      let actions = gameplay_actions(input, bindings)
+
+      use #(board, state), action <- list.fold(actions, #(board, state))
+      case action {
+        MoveUp -> #(core.move_selected_out(board), state)
+        MoveDown -> #(core.move_selected_in(board), state)
+        MoveLeft -> #(core.user_rotate_left(board), state)
+        MoveRight -> #(core.user_rotate_right(board), state)
+        MenuToggle -> #(board, state)
+        // TODO: Let the user toggle
+      }
+    }
+  }
 }
 
 pub fn gameplay_actions(

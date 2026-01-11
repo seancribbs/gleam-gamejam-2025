@@ -11,10 +11,10 @@ import tiramisu/tween
 // Transition durations
 
 // How long the "piece matched and removed" transition takes
-const piece_exit_duration_ms = 1000
+const piece_exit_duration_ms = 300
 
 // How long the "rotate ring left/right" transition takes
-const ring_rotation_duration_ms = 3000
+const ring_rotation_duration_ms = 100
 
 // How often new pieces should spawn
 const piece_spawn_timer_ms = 3000
@@ -590,4 +590,44 @@ pub fn piece_at(ring: Ring, position: Int) -> Slot {
     7 -> ring.h
     _ -> None
   }
+}
+
+pub fn move_selected_out(board: Board) -> Board {
+  case board.selected {
+    Inner -> Board(..board, selected: Middle)
+    Middle -> Board(..board, selected: Outer)
+    Outer -> board
+  }
+}
+
+pub fn move_selected_in(board: Board) -> Board {
+  case board.selected {
+    Inner -> board
+    Middle -> Board(..board, selected: Inner)
+    Outer -> Board(..board, selected: Middle)
+  }
+}
+
+pub fn user_rotate_left(board: Board) -> Board {
+  user_rotate(board, Left)
+}
+
+fn user_rotate(board: Board, direction: RingRotation) -> Board {
+  let entity = RingEntity(board.selected)
+  case dict.get(board.transitions, entity) {
+    Ok(_) -> board
+    Error(_) ->
+      Board(
+        ..board,
+        transitions: dict.insert(
+          board.transitions,
+          entity,
+          RotateRing(direction:, tween: rotate_tween()),
+        ),
+      )
+  }
+}
+
+pub fn user_rotate_right(board: Board) -> Board {
+  user_rotate(board, Right)
 }

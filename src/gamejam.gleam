@@ -70,11 +70,14 @@ fn update(
     Tick -> {
       let new_time = duration.add(model.time, ctx.delta_time)
       // process board tick
-      let board = core.handle_tick(model.board, ctx.delta_time)
+      let #(board, state) =
+        core.handle_tick(model.board, ctx.delta_time)
+        |> controls.handle_input(model.state, model.input, ctx.input)
       // handle user input (queueing transitions)
+
       // dispatch UI updates
       #(
-        Model(..model, time: new_time, board:),
+        Model(..model, time: new_time, board:, state:),
         effect.batch([
           // ui.dispatch_to_lustre(gameui.CurrentTime(new_time)),
           effect.dispatch(Tick),
