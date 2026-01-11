@@ -8,7 +8,19 @@ import gleam/result
 import gleam/time/duration
 import tiramisu/tween
 
-const piece_exit_duration: Int = 1000
+// Transition durations
+
+// How long the "piece matched and removed" transition takes
+const piece_exit_duration_ms = 1000
+
+// How long the "rotate ring left/right" transition takes
+const ring_rotation_duration_ms = 3000
+
+// How often new pieces should spawn
+const piece_spawn_timer_ms = 3000
+
+// How long it takes for a piece to fall into the board
+const piece_fall_duration_ms = 2000
 
 pub type Piece {
   Piece(kind: PieceKind, id: Int)
@@ -91,11 +103,16 @@ pub fn new_board() -> Board {
 }
 
 fn new_spawn_timer() -> duration.Duration {
-  duration.seconds(3)
+  duration.milliseconds(piece_spawn_timer_ms)
 }
 
 fn rotate_tween() -> tween.Tween(Float) {
-  tween.tween_float(0.0, 1.0, duration.seconds(3), easings.linear)
+  tween.tween_float(
+    0.0,
+    1.0,
+    duration.milliseconds(ring_rotation_duration_ms),
+    easings.linear,
+  )
 }
 
 pub fn new_rings() -> Rings {
@@ -152,7 +169,7 @@ fn spawn_piece(board: Board, delta_time: duration.Duration) -> Board {
           tween: tween.tween_float(
             0.0,
             1.0,
-            duration.milliseconds(2000),
+            duration.milliseconds(piece_fall_duration_ms),
             easings.linear,
           ),
         )
@@ -473,7 +490,7 @@ pub fn piece_exit_transition(ring_name: RingName, position: Int) -> Transition {
     tween: tween.tween_float(
       1.0,
       0.0,
-      duration.milliseconds(piece_exit_duration),
+      duration.milliseconds(piece_exit_duration_ms),
       easings.back_in,
     ),
   )
