@@ -5,7 +5,6 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
 import gleam/result
-import gleam/set
 import gleam/time/duration
 import tiramisu/tween
 
@@ -206,12 +205,9 @@ fn queue_pattern_match(
 }
 
 fn new_patterns() -> Rings {
-  let patterns = generate_patterns(set.new(), pattern_count)
+  let patterns = generate_patterns(dict.new(), pattern_count)
 
-  use rings, #(ring_name, position, kind) <- list.fold(
-    set.to_list(patterns),
-    new_rings(),
-  )
+  use rings, #(ring_name, position), kind <- dict.fold(patterns, new_rings())
 
   case ring_name {
     Inner -> Rings(..rings, inner: place_pattern(rings.inner, position, kind))
@@ -226,17 +222,20 @@ fn place_pattern(ring: Ring, position: Int, kind: PieceKind) -> Ring {
   ring
 }
 
+// fn generate_patterns_inner(p: dict.Dict(#(RingName, Int), PieceKind), cou)
+
 fn generate_patterns(
-  p: set.Set(#(RingName, Int, PieceKind)),
+  p: dict.Dict(#(RingName, Int), PieceKind),
   count: Int,
-) -> set.Set(#(RingName, Int, PieceKind)) {
+) -> dict.Dict(#(RingName, Int), PieceKind) {
   case count {
     0 -> p
     _ -> {
-      let new_pattern = generate_pattern()
-      case set.contains(p, new_pattern) {
+      let #(ring_name, position, piece_kind) = generate_pattern()
+      let key = #(ring_name, position)
+      case dict.has_key(p, key) {
         True -> generate_patterns(p, count)
-        False -> generate_patterns(set.insert(p, new_pattern), count - 1)
+        False -> generate_patterns(dict.insert(p, key, piece_kind), count - 1)
       }
     }
   }
