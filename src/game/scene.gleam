@@ -13,6 +13,8 @@ pub type Id {
   BoardGroup
   BoardRing(RingName)
   RingPieces(RingName)
+  RingPatterns(RingName)
+  Pattern(RingName, Int)
   Piece(Int)
   Overlay
   OverlayMask
@@ -32,6 +34,9 @@ pub fn id(id: Id) -> String {
     Piece(i) -> "piece-" <> int.to_string(i)
     Overlay -> "overlay"
     OverlayMask -> "overlay-mask"
+    RingPatterns(name) -> "patterns-" <> ring_name_to_string(name)
+    Pattern(name, position) ->
+      "pattern-" <> ring_name_to_string(name) <> "-" <> int.to_string(position)
   }
 }
 

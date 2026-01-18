@@ -1,7 +1,9 @@
 // import game/core
 import game/core
 import game/piece
-import game/scene.{BoardGroup, BoardRing, Piece, RingPieces, id} as _
+import game/scene.{
+  BoardGroup, BoardRing, Pattern, Piece, RingPatterns, RingPieces, id,
+} as _
 import game/state.{type GameState, InGame, Paused}
 import gleam/dict
 import gleam/float
@@ -31,11 +33,75 @@ pub fn board(
         list.flatten([
           rings(board.selected),
           pieces(board, time),
+          patterns(board),
           falling_pieces(board, time),
         ])
       _ -> []
     },
   )
+}
+
+fn patterns(board: core.Board) -> List(scene.Node) {
+  let geometry = pattern_geometry()
+  let core.Rings(inner:, middle:, outer:) = board.patterns
+
+  use r <- list.map([
+    #(core.Inner, inner),
+    #(core.Middle, middle),
+    #(core.Outer, outer),
+  ])
+  let #(ring_name, ring) = r
+
+  let patterns =
+    {
+      use slot, i <- list.index_map([
+        ring.a,
+        ring.b,
+        ring.c,
+        ring.d,
+        ring.e,
+        ring.f,
+        ring.g,
+        ring.h,
+      ])
+      use piece <- option.map(slot)
+
+      let transform = pattern_transform(ring_name, i)
+      let material = piece_material(piece)
+
+      scene.mesh(
+        id: id(Pattern(ring_name, i)),
+        transform:,
+        geometry:,
+        material:,
+        physics: None,
+      )
+    }
+    |> option.values()
+
+  scene.empty(
+    id: id(RingPatterns(ring_name)),
+    transform: transform.identity,
+    children: patterns,
+  )
+}
+
+fn pattern_transform(
+  ring_name: core.RingName,
+  position: Int,
+) -> transform.Transform {
+  piece_transform(Some(ring_name), position, duration.seconds(0), Error(Nil))
+}
+
+fn pattern_geometry() -> geometry.Geometry {
+  let assert Ok(geo) =
+    geometry.torus(
+      radius: 0.3,
+      tube: 0.03,
+      radial_segments: 4,
+      tubular_segments: 60,
+    )
+  geo
 }
 
 fn pieces(board: core.Board, time: duration.Duration) -> List(scene.Node) {
