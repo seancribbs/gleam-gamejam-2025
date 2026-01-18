@@ -7,7 +7,7 @@ import game/scene/board
 import game/scene/camera
 import game/scene/lights
 import game/scene/overlay
-import game/state.{type GameState, InGame, Menu}
+import game/state.{type GameState, InGame, Loading, Menu, Paused}
 import game/ui as gameui
 
 import gleam/option.{type Option, None, Some}
@@ -68,22 +68,36 @@ fn update(
   case msg {
     // TODO: branch on game state
     Tick -> {
-      let new_time = duration.add(model.time, ctx.delta_time)
-      // process board tick
-      let #(board, state) =
-        core.handle_tick(model.board, ctx.delta_time)
-        |> controls.handle_input(model.state, model.input, ctx.input)
-      // handle user input (queueing transitions)
+      case model.state {
+        InGame -> {
+          let new_time = duration.add(model.time, ctx.delta_time)
+          // process board tick
+          let #(board, state) =
+            core.handle_tick(model.board, ctx.delta_time)
+            |> controls.handle_input(model.state, model.input, ctx.input)
+          // handle user input (queueing transitions)
 
-      // dispatch UI updates
-      #(
-        Model(..model, time: new_time, board:, state:),
-        effect.batch([
-          // ui.dispatch_to_lustre(gameui.CurrentTime(new_time)),
-          effect.dispatch(Tick),
-        ]),
-        None,
-      )
+          // dispatch UI updates
+          #(
+            Model(..model, time: new_time, board:, state:),
+            effect.batch([
+              // ui.dispatch_to_lustre(gameui.CurrentTime(new_time)),
+              effect.dispatch(Tick),
+            ]),
+            None,
+          )
+        }
+        Loading | Menu | Paused -> {
+          let #(board, state) =
+            controls.handle_input(
+              model.board,
+              model.state,
+              model.input,
+              ctx.input,
+            )
+          #(Model(..model, board:, state:), effect.dispatch(Tick), None)
+        }
+      }
     }
     AssetsLoaded(textures) -> {
       #(

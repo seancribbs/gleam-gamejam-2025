@@ -100,7 +100,16 @@ pub fn handle_input(
   input: input.InputState,
 ) -> #(core.Board, state.GameState) {
   case state {
-    state.Loading | state.Menu | state.Paused -> #(board, state)
+    state.Loading | state.Menu -> #(board, state)
+    state.Paused -> {
+      let actions = menu_actions(input, bindings)
+
+      use #(board, state), action <- list.fold(actions, #(board, state))
+      case action {
+        MenuToggle -> #(board, state.InGame)
+        _ -> #(board, state)
+      }
+    }
     state.InGame -> {
       let actions = gameplay_actions(input, bindings)
 
@@ -110,7 +119,7 @@ pub fn handle_input(
         MoveDown -> #(core.move_selected_in(board), state)
         MoveLeft -> #(core.user_rotate_left(board), state)
         MoveRight -> #(core.user_rotate_right(board), state)
-        MenuToggle -> #(board, state)
+        MenuToggle -> #(board, state.Paused)
         // TODO: Let the user toggle
       }
     }
