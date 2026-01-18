@@ -9,6 +9,7 @@ import game/scene/lights
 import game/scene/overlay
 import game/state.{type GameState, InGame, Loading, Menu, Paused}
 import game/ui as gameui
+import tiramisu/ui
 
 import gleam/option.{type Option, None, Some}
 import gleam/time/duration
@@ -22,6 +23,7 @@ import tiramisu/scene
 pub type Model {
   Model(
     state: GameState,
+    bridge: gameui.Bridge,
     time: duration.Duration,
     board: core.Board,
     input: input.InputBindings(controls.Action),
@@ -33,23 +35,29 @@ pub type Msg {
   Tick
   AssetsLoaded(assets.LoadedTextures)
   AssetLoadingFailed
+  // FromBridge(gameui.Msg)
 }
 
 pub fn main() -> Nil {
-  gameui.start()
+  let bridge = ui.new_bridge()
+  gameui.start(bridge)
 
-  let app = tiramisu.application(init:, update:, view:)
+  let app = tiramisu.application(init: init(bridge, _), update:, view:)
 
   let assert Ok(_) = tiramisu.start(app, "#game", tiramisu.FullScreen, None)
 
   Nil
 }
 
-fn init(ctx: tiramisu.Context) -> #(Model, Effect(Msg), Option(_)) {
+fn init(
+  bridge: gameui.Bridge,
+  ctx: tiramisu.Context,
+) -> #(Model, Effect(Msg), Option(_)) {
   savoiardi.set_scene_background_color(ctx.scene, 0)
   #(
     Model(
       state: Menu,
+      bridge:,
       time: duration.milliseconds(0),
       board: core.new_board(),
       input: controls.default_bindings(),
@@ -81,7 +89,7 @@ fn update(
           #(
             Model(..model, time: new_time, board:, state:),
             effect.batch([
-              // ui.dispatch_to_lustre(gameui.CurrentTime(new_time)),
+              ui.send_to_ui(model.bridge, gameui.GameStateChanged(state)),
               effect.dispatch(Tick),
             ]),
             None,
@@ -95,13 +103,20 @@ fn update(
               model.input,
               ctx.input,
             )
-          #(Model(..model, board:, state:), effect.dispatch(Tick), None)
+          #(
+            Model(..model, board:, state:),
+            effect.batch([
+              ui.send_to_ui(model.bridge, gameui.GameStateChanged(state)),
+              effect.dispatch(Tick),
+            ]),
+            None,
+          )
         }
       }
     }
     AssetsLoaded(textures) -> {
       #(
-        Model(..model, textures: Some(textures), state: InGame),
+        Model(..model, textures: Some(textures), state: Menu),
         effect.dispatch(Tick),
         None,
       )

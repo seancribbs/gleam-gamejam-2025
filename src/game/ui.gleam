@@ -1,33 +1,41 @@
+import game/controls
 import game/state.{type GameState, InGame, Loading, Menu, Paused}
+import gleam/function
 import lustre
 import lustre/attribute
 import lustre/effect
 import lustre/element.{type Element}
 import lustre/element/html
+import tiramisu/ui
 
-pub fn start() {
+pub type Bridge =
+  ui.Bridge(Msg)
+
+pub fn start(bridge: ui.Bridge(Msg)) {
   let assert Ok(_) =
-    lustre.application(init, update, view)
+    lustre.application(init(bridge, _), update, view)
     |> lustre.start("#app", Nil)
 
   Nil
 }
 
 type Model {
-  Model(state: GameState)
+  Model(state: GameState, bridge: Bridge)
 }
 
 pub type Msg {
-  LoadingFinished
+  GameStateChanged(GameState)
+  UserAction(controls.Action)
 }
 
-fn init(_flags) {
-  #(Model(InGame), effect.none())
+fn init(bridge: Bridge, _flags) {
+  #(Model(InGame, bridge), ui.register_lustre(bridge, function.identity))
 }
 
-fn update(_model: Model, msg: Msg) {
+fn update(model: Model, msg: Msg) {
   case msg {
-    LoadingFinished -> #(Model(state: Menu), effect.none())
+    GameStateChanged(state) -> #(Model(..model, state:), effect.none())
+    UserAction(_) -> #(model, effect.none())
   }
 }
 
@@ -51,7 +59,7 @@ fn view_paused(_model: Model) -> Element(Msg) {
   html.div(
     [
       attribute.class(
-        "absolute inset-x-auto inset-y-1/2 text-3xl text-white text-center w-full h-full",
+        "absolute inset-x-auto inset-y-1/2 text-8xl text-white text-center w-full h-full",
       ),
     ],
     [
