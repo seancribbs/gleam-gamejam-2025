@@ -9,6 +9,7 @@ import game/scene/lights
 import game/scene/overlay
 import game/state.{type GameState, InGame, Loading, Menu, Paused}
 import game/ui as gameui
+import gleam/list
 import tiramisu/ui
 
 import gleam/option.{type Option, None, Some}
@@ -80,34 +81,46 @@ fn update(
         InGame -> {
           let new_time = duration.add(model.time, ctx.delta_time)
           // process board tick
-          let #(board, state) =
+          // handle user input (queueing transitions)
+          let #(board, state, forwarded_actions) =
             core.handle_tick(model.board, ctx.delta_time)
             |> controls.handle_input(model.state, model.input, ctx.input)
-          // handle user input (queueing transitions)
 
           // dispatch UI updates
+          let ui_effects =
+            forwarded_actions
+            |> list.map(gameui.UserAction)
+            |> list.map(ui.send_to_ui(model.bridge, _))
+
           #(
             Model(..model, time: new_time, board:, state:),
             effect.batch([
-              ui.send_to_ui(model.bridge, gameui.GameStateChanged(state)),
               effect.dispatch(Tick),
+              ui.send_to_ui(model.bridge, gameui.GameStateChanged(state)),
+              ..ui_effects
             ]),
             None,
           )
         }
         Loading | Menu | Paused -> {
-          let #(board, state) =
+          let #(board, state, forwarded_actions) =
             controls.handle_input(
               model.board,
               model.state,
               model.input,
               ctx.input,
             )
+          let ui_effects =
+            forwarded_actions
+            |> list.map(gameui.UserAction)
+            |> list.map(ui.send_to_ui(model.bridge, _))
+
           #(
             Model(..model, board:, state:),
             effect.batch([
-              ui.send_to_ui(model.bridge, gameui.GameStateChanged(state)),
               effect.dispatch(Tick),
+              ui.send_to_ui(model.bridge, gameui.GameStateChanged(state)),
+              ..ui_effects
             ]),
             None,
           )

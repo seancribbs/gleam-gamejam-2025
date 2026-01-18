@@ -35,7 +35,9 @@ fn init(bridge: Bridge, _flags) {
 fn update(model: Model, msg: Msg) {
   case msg {
     GameStateChanged(state) -> #(Model(..model, state:), effect.none())
-    UserAction(_) -> #(model, effect.none())
+    UserAction(_) -> {
+      #(model, effect.none())
+    }
   }
 }
 
@@ -77,6 +79,7 @@ fn view_menu(_model: Model) -> Element(Msg) {
     ],
     [
       menu_title(),
+      // TODO: Add menu entries
     ],
   )
 }

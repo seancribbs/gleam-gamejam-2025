@@ -98,29 +98,46 @@ pub fn handle_input(
   state: state.GameState,
   bindings: input.InputBindings(Action),
   input: input.InputState,
-) -> #(core.Board, state.GameState) {
+) -> #(core.Board, state.GameState, List(Action)) {
   case state {
-    state.Loading | state.Menu -> #(board, state)
+    state.Menu -> {
+      let actions = menu_actions(input, bindings)
+
+      use #(board, state, forward_actions), action <- list.fold(
+        actions,
+        #(board, state, []),
+      )
+      case action {
+        MoveUp | MoveDown | MoveLeft | MoveRight -> #(board, state, [
+          action,
+          ..forward_actions
+        ])
+        MenuToggle -> #(board, state.InGame, forward_actions)
+      }
+    }
+    state.Loading -> #(board, state, [])
     state.Paused -> {
       let actions = menu_actions(input, bindings)
 
-      use #(board, state), action <- list.fold(actions, #(board, state))
+      use #(board, state, _), action <- list.fold(actions, #(board, state, []))
       case action {
-        MenuToggle -> #(board, state.InGame)
-        _ -> #(board, state)
+        MenuToggle -> #(board, state.InGame, [])
+        _ -> #(board, state, [])
       }
     }
     state.InGame -> {
       let actions = gameplay_actions(input, bindings)
 
-      use #(board, state), action <- list.fold(actions, #(board, state))
+      use #(board, state, forward_actions), action <- list.fold(
+        actions,
+        #(board, state, []),
+      )
       case action {
-        MoveUp -> #(core.move_selected_out(board), state)
-        MoveDown -> #(core.move_selected_in(board), state)
-        MoveLeft -> #(core.user_rotate_left(board), state)
-        MoveRight -> #(core.user_rotate_right(board), state)
-        MenuToggle -> #(board, state.Paused)
-        // TODO: Let the user toggle
+        MoveUp -> #(core.move_selected_out(board), state, forward_actions)
+        MoveDown -> #(core.move_selected_in(board), state, forward_actions)
+        MoveLeft -> #(core.user_rotate_left(board), state, forward_actions)
+        MoveRight -> #(core.user_rotate_right(board), state, forward_actions)
+        MenuToggle -> #(board, state.Paused, forward_actions)
       }
     }
   }
