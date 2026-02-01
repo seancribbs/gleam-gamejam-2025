@@ -39,7 +39,7 @@ pub type PieceKind {
 }
 
 pub type BoardState {
-  Playing
+  Playing(score: Int)
   Failed
 }
 
@@ -95,7 +95,7 @@ pub type Ring {
 pub fn new_board() -> Board {
   Board(
     next_piece_id: 1,
-    state: Playing,
+    state: Playing(score: 0),
     pieces: new_rings(),
     patterns: new_patterns(),
     selected: Inner,
@@ -138,7 +138,7 @@ pub fn handle_tick(board: Board, delta_time: duration.Duration) -> Board {
 
 fn clear_failed(board: Board) -> Board {
   case board.state {
-    Playing -> board
+    Playing(_) -> board
     Failed -> Board(..new_board(), selected: board.selected)
   }
 }
@@ -151,11 +151,26 @@ fn check_solution(board: Board) -> Board {
 
       Board(
         ..board,
+        state: increase_score(board.state, 250),
         patterns:,
         transitions: dict.merge(board.transitions, transitions),
       )
     }
     False -> board
+  }
+}
+
+fn increase_score(state: BoardState, points: Int) -> BoardState {
+  case state {
+    Playing(score:) -> Playing(score + points)
+    Failed -> Failed
+  }
+}
+
+pub fn current_score(state: BoardState) -> Int {
+  case state {
+    Playing(score:) -> score
+    Failed -> 0
   }
 }
 
@@ -346,11 +361,12 @@ fn advance_transitions(board: Board, delta_time: duration.Duration) -> Board {
       }
       PieceExit(position:, tween:) -> {
         let tween = tween.update(tween, delta_time)
-        let #(pieces, transitions) = case tween.is_complete(tween) {
+        let #(pieces, transitions, state) = case tween.is_complete(tween) {
           // Just advance the transition
           False -> #(
             board.pieces,
             dict.insert(board.transitions, entity, PieceExit(position:, tween:)),
+            board.state,
           )
 
           // Remove the piece from the board and clear the transition
@@ -373,10 +389,10 @@ fn advance_transitions(board: Board, delta_time: duration.Duration) -> Board {
                   outer: clear_piece(board.pieces.outer, slot),
                 )
             }
-            #(pieces, dict.delete(board.transitions, entity))
+            #(pieces, dict.delete(board.transitions, entity), increase_score(board.state, 10))
           }
         }
-        Board(..board, pieces:, transitions:)
+        Board(..board, pieces:, transitions:, state:)
       }
       PieceDrop(tween:) -> {
         let tween = tween.update(tween, delta_time)

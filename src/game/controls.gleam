@@ -50,14 +50,10 @@ pub const default_ui_bindings = [
   #(MenuToggle, [Key(input.Escape), Button(input.Start)]),
 ]
 
-// Forward  [ W ] [ DPadUp ]
-//
-
-pub fn default_bindings() -> input.InputBindings(Action) {
+pub fn default_bindings() -> UserBindings {
   default_ui_bindings
   |> dict.from_list()
   |> ui_bindings_to_user()
-  |> user_bindings_to_input_bindings()
 }
 
 pub fn user_bindings_to_input_bindings(

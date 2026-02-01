@@ -1,6 +1,6 @@
-import game/controls
+import gleam/int
+import game/bridge
 import game/state.{type GameState, InGame, Loading, Menu, Paused}
-import gleam/function
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -8,10 +8,7 @@ import lustre/element.{type Element}
 import lustre/element/html
 import tiramisu/ui
 
-pub type Bridge =
-  ui.Bridge(Msg)
-
-pub fn start(bridge: ui.Bridge(Msg)) {
+pub fn start(bridge: bridge.Bridge) {
   let assert Ok(_) =
     lustre.application(init(bridge, _), update, view)
     |> lustre.start("#app", Nil)
@@ -20,24 +17,33 @@ pub fn start(bridge: ui.Bridge(Msg)) {
 }
 
 type Model {
-  Model(state: GameState, bridge: Bridge)
+  Model(state: GameState, bridge: bridge.Bridge, current_score: Int)
 }
 
 pub type Msg {
-  GameStateChanged(GameState)
-  UserAction(controls.Action)
+  FromBridge(bridge.BridgeMsg)
 }
 
-fn init(bridge: Bridge, _flags) {
-  #(Model(InGame, bridge), ui.register_lustre(bridge, function.identity))
+fn init(bridge: bridge.Bridge, _flags) {
+  #(Model(InGame, bridge, 0), ui.register_lustre(bridge, FromBridge))
 }
 
 fn update(model: Model, msg: Msg) {
   case msg {
-    GameStateChanged(state) -> #(Model(..model, state:), effect.none())
-    UserAction(_) -> {
-      #(model, effect.none())
-    }
+    FromBridge(msg) -> handle_bridge_msg(model, msg)
+    // GameStateChanged(state) -> #(Model(..model, state:), effect.none())
+    // UserAction(_) -> {
+    //   #(model, effect.none())
+    // }
+  }
+}
+
+fn handle_bridge_msg(model: Model, msg: bridge.BridgeMsg) {
+  case msg {
+    bridge.GameStateChanged(state) -> #(Model(..model, state:), effect.none())
+    bridge.UserAction(_) -> #(model, effect.none())
+    bridge.UpdateScore(score:) -> #(Model(..model, current_score: score), effect.none())
+    _ -> #(model, effect.none())
   }
 }
 
@@ -93,8 +99,26 @@ fn menu_title() -> Element(_) {
   ])
 }
 
-fn view_in_game(_model: Model) -> Element(Msg) {
-  element.none()
+fn view_in_game(model: Model) -> Element(Msg) {
+  let lucy = case model.current_score {
+    s if s > 1000 -> "lucy-happy.png"
+    s if s > 100 -> "lucy.png"
+    _ -> "lucy-sleep.png"
+  }
+  html.div([
+    attribute.class(
+      "absolute text-2xl text-white top-2 left-2"
+    )
+  ],
+  [
+    html.img([
+      attribute.width(40),
+      attribute.height(40),
+      attribute.src(lucy),
+      attribute.class("inline mr-2"),
+    ]),
+    html.text(int.to_string(model.current_score))
+  ])
 }
 
 fn view_loading(_model: Model) -> Element(Msg) {
